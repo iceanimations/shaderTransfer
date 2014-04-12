@@ -13,6 +13,10 @@ class Window(Form, Base):
     def __init__(self, parent = qtfy.getMayaWindow()):
         super(Window, self).__init__(parent)
         self.setupUi(self)
+        
+        self.sourceObject = None
+        self.targetObjects = []
+        
         self.transferButton.clicked.connect(self.transfer)
         self.transferPolicyBox.currentIndexChanged.connect(self.handleComboBox)
         self.addSourceButton.clicked.connect(self.addSourceObjects)
@@ -20,26 +24,16 @@ class Window(Form, Base):
         self.removeAllButton.clicked.connect(self.removeAll)
         self.removeSelectionButton.clicked.connect(self.removeSelection)
         self.closeButton.clicked.connect(self.close)
-        self.uvButton.clicked.connect(self.switchUVButton)
         self.progressBar.hide()
         self.mainProgressBar.hide()
         self.bigProgressBar.hide()
         self.sBar = self.statusBar()
         self.handleComboBox()
-        self.sourceObject = None
-        self.targetObjects = []
-        self.transferUVs = False
 
         #update the database
         site.addsitedir(r'R:/pipe_Repo/users/Qurban')
         import appUsageApp
         appUsageApp.updateDatabase('shaderTransfer')
-        
-    def switchUVButton(self):
-        '''
-        sets the "transferUVs" variable to True or False
-        '''
-        self.transferUVs = self.uvButton.isChecked()
         
     def closeEvent(self, event):
         self.deleteLater()
@@ -81,7 +75,7 @@ class Window(Form, Base):
     def removeAll(self):
         '''removes all the added objects from both lists'''
         self.targetBox.clear()
-        self.targetObjects = []
+        del self.targetObjects[:]
         
     def removeSelection(self):
         '''removes the selected objects from the both lists'''
@@ -118,10 +112,7 @@ class Window(Form, Base):
         badFaces = {} # number of faces is different in source and target meshes
         badLength = [] # number of meshes is different in source and target sets
         if self.transferPolicy == 'ctoc':
-            if len(self.sgs(self.sourceObject)) == 1:
-                self.handleSingleSG(self.sourceObject, self.targetObjects)
-            else:
-                badFaces.update(self.ctocCaller(self.sourceObject, self.targetObjects))
+            badFaces.update(self.singleToSingle(self.sourceObject, self.targetObjects))
         if self.transferPolicy == 'stos':
             faces, length = self.stosCaller(self.sourceObject, self.targetObjects)
             badFaces.update(faces)
@@ -141,72 +132,85 @@ class Window(Form, Base):
                 detail += str(i+1) + ': '+ badLength[i] +'\n'
             self.msgBox(self, msg = 'Number of meshes in Target sets do not match the number of meshes in the Source Set',
                    icon = QMessageBox.Warning, details = detail)
+        self.bigProgressBar.hide()
+        self.bigProgressBar.setValue(0)
+        self.mainProgressBar.hide()
+        self.mainProgressBar.setValue(0)
         self.progressBar.hide()
-        
-    def sgs(self, mesh):
-        return set(pc.listConnections(mesh, type=pc.nt.ShadingEngine))
-    
-    def handleSingleSG(self, src, targets):
-        sg = set(pc.listConnections(src, type=pc.nt.ShadingEngine)).pop()
-        pc.sets(sg, fe=targets)
-        print 'hello'
-        
+        self.progressBar.setValue(0)
             
-    def transferShaders(self, src_mesh, targ):
+    def singleToSingle(self, source, targets):
         # list the shading engines connected to the source mesh
-        targ = str(targ)
-        shGroups = set(mc.listConnections(str(src_mesh), type='shadingEngine'))
+        
+        badFaces = {}
+        source = pc.PyNode(source); targets = [pc.PyNode(target) for target in targets]
+        sourceFaces = source.numFaces()
+        shGroups = set(source.connections(type=pc.nt.ShadingEngine))
+        
         sgLen = len(shGroups)
+        targLen = len(targets)
         if sgLen > 1:
-            self.progressBar.show()
-        self.progressBar.setMaximum(sgLen)
+            self.bigProgressBar.show()
+        self.bigProgressBar.setMaximum(sgLen)
+        
+        if targLen > 1:
+            self.mainProgressBar.show()
+            self.mainProgressBar.setMaximum(targLen)
+        
         c = 0
+        targetMembers = []
         for sg in shGroups:
-            sgMembers = mc.sets(sg, q = True)
-            for mem in sgMembers:
-                if mem == src_mesh:
-                    pc.sets(sg, e = 1, fe = targ)
-                    return
-            for mem in sgMembers:
-                meshAndFace = mem.split('.')
-                if len(meshAndFace) == 1:
+            sgMembers = mc.sets(str(sg), q = True)
+            temp = []
+            for member in sgMembers:
+                try:
+                    pyNode = pc.PyNode(member)
+                    temp.append(pyNode)
+                except pc.MayaAttributeError:
+                    pass
+            sgMembers[:] = temp
+            memLen = len(sgMembers)
+            if source in sgMembers:
+                pc.sets(sg, e = 1, fe=targets)
+                return badFaces
+            del targetMembers[:]
+            
+            if memLen > 1 and targLen < 2:
+                self.progressBar.show()
+                self.progressBar.setMaximum(memLen)
+            
+            c2 = 0
+            for targ in targets:
+                if sourceFaces != targ.numFaces():
+                    badFaces[str(source)] = str(targ)
                     continue
-                else:
-                    if pc.objExists(mem):
-                        if pc.PyNode(mem).node() == src_mesh:
-                            face = meshAndFace[-1]
-                            tar = '.'.join([str(targ), face])
-                            try:
-                                pc.sets(pc.PyNode(sg), e=1, fe=pc.PyNode(tar))
-                            except: pass
+                
+                c3 = 0
+                for mem in sgMembers:
+                    meshAndFace = str(mem).split('.')
+                    if len(meshAndFace) == 1:
+                        continue
+                    if pc.objExists(mem) and mem.node() == source:
+                        item = '.'.join([str(targ), meshAndFace[-1]])
+                        if pc.objExists(item):
+                            targetMembers.append(item)
+                    c3 += 1
+                    self.progressBar.setValue(c3)
+                    qApp.processEvents()
+                    
+                c2 += 1
+                self.mainProgressBar.setValue(c2)
+                qApp.processEvents()
+            if targetMembers:
+                pc.sets(sg, e=1, fe=targetMembers)
             c += 1
-            self.progressBar.setValue(c)
+            self.bigProgressBar.setValue(c)
             qApp.processEvents()
+            
         # transfer UVs
         if self.uvButton.isChecked():
-            self.transferUVs(sourceMesh, targetMesh)
-    
-    def ctocCaller(self, source, target):
-        badFaces = {}
-        sourceMesh = pc.PyNode(source)
-        sourceFaces = sourceMesh.faces
-        count = 0
-        tarLen = len(target)
-        if tarLen > 1:
-            self.mainProgressBar.show()
-        self.mainProgressBar.setMaximum(tarLen)
-        for targetMesh in target:
-            targetMesh = pc.PyNode(targetMesh)
-            targetFaces = targetMesh.faces
-            if sourceFaces != targetFaces:
-                badFaces[sourceMesh] = targetMesh
-                continue
-            #transfer the shaders
-            self.transferShaders(sourceMesh, targetMesh)
-            count += 1
-            self.mainProgressBar.setValue(count)
-            qApp.processEvents()
-        self.mainProgressBar.hide()
+            for targ in targets:
+                self.transferUVs(source, targ)
         return badFaces
     
     def stosCaller(self, sourceSet, targetSets):
@@ -252,7 +256,7 @@ class Window(Form, Base):
                         badFaces[src] = targ
                         continue
                     #transfer the shaders
-                    self.transferShaders(src, targ)
+                    self.singleToSingle(src, [targ])
                 else: badLength.append(src)
                 c2 += 1
                 self.mainProgressBar.setValue(c2)
