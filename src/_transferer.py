@@ -161,51 +161,52 @@ class Window(Form, Base):
         targetMembers = []
         for sg in shGroups:
             sgMembers = mc.sets(str(sg), q = True)
-            temp = []
-            for member in sgMembers:
-                try:
-                    pyNode = pc.PyNode(member)
-                    temp.append(pyNode)
-                except pc.MayaAttributeError:
-                    pass
-            sgMembers[:] = temp
-            memLen = len(sgMembers)
-            if source in sgMembers:
-                pc.sets(sg, e = 1, fe=targets)
-                return badFaces
-            del targetMembers[:]
-            
-            if memLen > 1 and targLen < 2:
-                self.progressBar.show()
-                self.progressBar.setMaximum(memLen)
-            
-            c2 = 0
-            for targ in targets:
-                if sourceFaces != targ.numFaces():
-                    badFaces[str(source)] = str(targ)
-                    continue
+            if sgMembers:
+                temp = []
+                for member in sgMembers:
+                    try:
+                        pyNode = pc.PyNode(member)
+                        temp.append(pyNode)
+                    except pc.MayaAttributeError:
+                        pass
+                sgMembers[:] = temp
+                memLen = len(sgMembers)
+                if source in sgMembers:
+                    pc.sets(sg, e = 1, fe=targets)
+                    return badFaces
+                del targetMembers[:]
                 
-                c3 = 0
-                for mem in sgMembers:
-                    meshAndFace = str(mem).split('.')
-                    if len(meshAndFace) == 1:
+                if memLen > 1 and targLen < 2:
+                    self.progressBar.show()
+                    self.progressBar.setMaximum(memLen)
+                
+                c2 = 0
+                for targ in targets:
+                    if sourceFaces != targ.numFaces():
+                        badFaces[str(source)] = str(targ)
                         continue
-                    if pc.objExists(mem) and mem.node() == source:
-                        item = '.'.join([str(targ), meshAndFace[-1]])
-                        if pc.objExists(item):
-                            targetMembers.append(item)
-                    c3 += 1
-                    self.progressBar.setValue(c3)
-                    qApp.processEvents()
                     
-                c2 += 1
-                self.mainProgressBar.setValue(c2)
+                    c3 = 0
+                    for mem in sgMembers:
+                        meshAndFace = str(mem).split('.')
+                        if len(meshAndFace) == 1:
+                            continue
+                        if pc.objExists(mem) and mem.node() == source:
+                            item = '.'.join([str(targ), meshAndFace[-1]])
+                            if pc.objExists(item):
+                                targetMembers.append(item)
+                        c3 += 1
+                        self.progressBar.setValue(c3)
+                        qApp.processEvents()
+                        
+                    c2 += 1
+                    self.mainProgressBar.setValue(c2)
+                    qApp.processEvents()
+                if targetMembers:
+                    pc.sets(sg, e=1, fe=targetMembers)
+                c += 1
+                self.bigProgressBar.setValue(c)
                 qApp.processEvents()
-            if targetMembers:
-                pc.sets(sg, e=1, fe=targetMembers)
-            c += 1
-            self.bigProgressBar.setValue(c)
-            qApp.processEvents()
             
         # transfer UVs
         if self.uvButton.isChecked():
