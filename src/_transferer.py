@@ -37,6 +37,9 @@ class Window(Form, Base):
         
     def closeEvent(self, event):
         self.deleteLater()
+        
+    def hideEvent(self, event):
+        self.close()
     
     def setStatus(self, msg):
         '''sets the message for the status bar of main window'''
