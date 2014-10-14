@@ -37,9 +37,6 @@ class Window(Form, Base):
         
     def closeEvent(self, event):
         self.deleteLater()
-        
-    def hideEvent(self, event):
-        self.close()
     
     def setStatus(self, msg):
         '''sets the message for the status bar of main window'''
@@ -223,6 +220,8 @@ class Window(Form, Base):
         badFaces = {} # when the number of faces is is different in the source and target meshes
         badLength = [] # when the number of meshes is different in the source and target sets
         sourceMeshes = []
+        if type(sourceSet) == pc.nt.Transform:
+            sourceSet = sourceSet.getChildren()
         for transform in sourceSet:
             mesh = transform.getShape()
             if type(mesh) == pc.nt.Mesh: sourceMeshes.append(mesh)
@@ -238,6 +237,8 @@ class Window(Form, Base):
             _set = pc.PyNode(_set)
             targetMeshes = []
             #get the meshes from the transform nodes
+            if type(_set) == pc.nt.Transform:
+                _set = _set.getChildren()
             for transform in _set:
                 mesh = transform.getShape()
                 if type(mesh) ==  pc.nt.Mesh: targetMeshes.append(mesh)
@@ -282,7 +283,7 @@ class Window(Form, Base):
     def selectedObjects(self, policy):
         '''returns the list of selected objects from the scene'''
         if policy == 'stos':
-            return [str(obj) for obj in pc.ls(sl=True, type=pc.nt.ObjectSet)]
+            return [str(obj) for obj in pc.ls(sl=True, type=[pc.nt.ObjectSet, pc.nt.Transform])]
         if policy == 'ctoc':
             return [str(obj) for obj in pc.ls(sl=True, dag=True, type='mesh')]
     
