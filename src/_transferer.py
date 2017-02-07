@@ -173,6 +173,8 @@ class Window(Form, Base):
                 memLen = len(sgMembers)
                 if source in sgMembers:
                     pc.sets(sg, e = 1, fe=targets)
+                    for trg in targets:
+                        self.transferUVs(source, trg)
                     return badFaces
                 del targetMembers[:]
                 
@@ -202,6 +204,7 @@ class Window(Form, Base):
                     c2 += 1
                     self.mainProgressBar.setValue(c2)
                     qApp.processEvents()
+                    self.transferUVs(source, targ)
                 if targetMembers:
                     pc.sets(sg, e=1, fe=targetMembers)
                 c += 1
@@ -209,9 +212,9 @@ class Window(Form, Base):
                 qApp.processEvents()
             
         # transfer UVs
-        if self.uvButton.isChecked():
-            for targ in targets:
-                self.transferUVs(source, targ)
+#         if self.uvButton.isChecked():
+#             for targ in targets:
+#                 self.transferUVs(source, targ)
         return badFaces
     
     def stosCaller(self, sourceSet, targetSets):
@@ -291,7 +294,7 @@ class Window(Form, Base):
         '''
         transfers uv from source mesh to target mesh
         '''
-        pc.polyTransfer(target, ao = source)
+        pc.polyTransfer(target, ao = source, uv=True)
 
     def msgBox(self, parent, msg = None, btns = QMessageBox.Ok,
                icon = None, ques = None, details = None):
