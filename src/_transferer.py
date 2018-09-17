@@ -225,6 +225,8 @@ class Window(Form, Base):
         sourceMeshes = []
         if type(sourceSet) == pc.nt.Transform:
             sourceSet = sourceSet.getChildren()
+        else:
+            sourceSet = sourceSet.dsm.inputs()
         for transform in sourceSet:
             mesh = transform.getShape()
             if type(mesh) == pc.nt.Mesh: sourceMeshes.append(mesh)
@@ -242,30 +244,26 @@ class Window(Form, Base):
             #get the meshes from the transform nodes
             if type(_set) == pc.nt.Transform:
                 _set = _set.getChildren()
+            else:
+                _set = _set.dsm.inputs()
             for transform in _set:
                 mesh = transform.getShape()
                 if type(mesh) ==  pc.nt.Mesh: targetMeshes.append(mesh)
             # for each mesh in source set, transfer the shader to corresponding mesh in the target set
             c2 = 0
             for i in range(sourceLength):
+                print i
                 src = sourceMeshes[i]
                 # get the post fix name of the mesh in the set
-                srcPostFix = src.split('|')[-1].split(':')[-1]
-                targetPostFixs = [x.split('|')[-1].split(':')[-1] for x in targetMeshes]
-                for postFix in targetPostFixs:
-                    index = None
-                    if srcPostFix == postFix:
-                        index = targetPostFixs.index(postFix)
-                        break
-                if index is not None:
-                    targ = targetMeshes[index]
+                try:
+                    targ = targetMeshes[i]
                     # check if the number of faces is different in the corresponding meshes
                     if len(src.faces) != len(targ.faces):
                         badFaces[src] = targ
                         continue
                     #transfer the shaders
                     self.singleToSingle(src, [targ])
-                else: badLength.append(src)
+                except IndexError: badLength.append(src)
                 c2 += 1
                 self.mainProgressBar.setValue(c2)
                 qApp.processEvents()
